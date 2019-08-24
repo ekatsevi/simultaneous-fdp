@@ -1,8 +1,3 @@
----
-output:
-  pdf_document: default
-  html_document: default
----
 # Simultaneous FDP bounds
 
 Code to reproduce the figures from the paper:
