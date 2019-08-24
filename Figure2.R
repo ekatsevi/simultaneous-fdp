@@ -1,6 +1,8 @@
 ###############################################################
 #
-# Compare proposed bounds to DKW, Robbins bounds
+# Plot FDP-bar and FDP-hat for UK Biobank platelet count data,
+# as well as enrichment of "Blood coagulation" and "Platelet
+# activation" GO terms using GREAT. 
 # (to reproduce Figure 2).
 # 
 # Author: Eugene Katsevich
@@ -12,75 +14,102 @@ cat(sprintf("Working on Figure 2...\n"))
 # set up workspace
 source("setup.R")
 
-# simulation parameters
-n = 2500           # number of hypotheses
-alpha = 0.1        # confidence level
-t = seq(1e-5,1,    # p-value cutoffs
-        by = 1e-5)
+# analysis parameters
+alpha = 0.05              # confidence level for simultaneous FDP bound
+q = 0.1                   # FDR target level
+phenotype = "platelet"    # phenotype of interest
 
-# compute constant c from Theorem 1
-c = log(1/alpha)/log(1 + log(1/alpha))
+# download KnockoffZoom data, if necessary
+download_KZ_data(data_dir)
 
-# compute each bound
-Robbins = n*t/alpha
-Proposed = c*(1+n*t)
-DKW = sqrt(n/2*log(1/alpha)) + n*t
-Quantile = qbinom(1-alpha, n, t)
-df = data.frame(t, Robbins, Proposed, DKW, Quantile)
-names(df)[5] = "(Pointwise FDP Quantile)"
+# read in processed data
+df = read_KZ_data(data_dir, phenotype)
 
-# plot bounds
-df_melt = melt(df, 1)
-p1 = ggplot(data = df_melt, aes(x = t, y = value, group = variable)) + scale_x_log10() + scale_y_log10() + 
-  geom_line(aes(color = variable, linetype = variable)) + theme_custom() + 
-  theme(legend.position = "bottom", legend.title = element_blank()) + 
-  geom_vline(xintercept = alpha/n, linetype = "dotted") + geom_vline(xintercept = alpha, linetype = "dotted") + 
-  scale_colour_manual(name = "Bound", values = c("blue", "magenta", "orangered", "black")) + 
-  scale_linetype_manual(name = "Bound", values = c("longdash", "solid", "dotdash", "dotted"))  +
-  ylab("Bound on V(t)")
-plot(p1)
+# compute knockoffs FDP multipler
+C = -log(alpha)/log(2-alpha)
 
-# compute where bounds are tightest
-reps = 10000
-Robbins = numeric(reps)
-Proposed = numeric(reps)
-DKW = numeric(reps)
-for(rep in 1:reps){
-  p = sort(runif(n))
-  Robbins[rep] = p[which.max((1:n)/(n*p/alpha))]
-  Proposed[rep] = p[which.max((1:n)/(c*(1+n*p)))]
-  DKW[rep] = p[which.max((1:n)/(sqrt(n/2*log(1/alpha)) + n*p))]
+# compute FDP-hat and FDP-bar
+FDP_hat_vec = get_FDP_hat(df$W)
+df$FDP_hat = FDP_hat_vec
+df = df %>% mutate(FDP_bar = pmin(1, C*FDP_hat)) %>% filter(W > 0)
+df$num_rejections = 1:nrow(df)
+
+# find set of interesting points along the path
+values = df %>% filter(num_rejections <= 1000) %>% pull(FDP_bar)
+k_vals = get_informative_points(values, min_val_improvement = 0.01, min_k_improvement = 50)
+informative_points = data.frame(k_vals, values[k_vals])
+names(informative_points) = c("num_rejections", "FDP_bar")
+
+# write regions corresponding to each interesting rejection set to file
+if(!dir.exists(sprintf("%s/bed_files", data_dir))){
+  dir.create(sprintf("%s/bed_files", data_dir))
+}
+for(k in k_vals){
+  filename = sprintf("%s/bed_files/regions_platelet_%d.bed", data_dir, k)
+  df %>% 
+    filter(Phenotype == "platelet", num_rejections <= k, !is.na(BP.min)) %>% 
+    select(CHR, BP.min, BP.max) %>%
+    mutate(CHR = sprintf("chr%d", CHR)) %>%
+    write_tsv(path = filename, col_names = FALSE)
 }
 
-frac_in_range = mean(alpha/n <= Proposed & Proposed <= alpha)
-cat(sprintf("Tightest bound achieved in interesting region %0.2f of the time.", frac_in_range))
+# [compute GREAT enrichment for each interesting rejection set via 
+# http://great.stanford.edu/public/html/, using the input files in /data_dir/bed_files
+# and save results to /data_dir/GREAT_output]
+
+# read GREAT results
+great_results = lapply(k_vals, function(k)(read_great_results(data_dir, k)))
+great_results = do.call("rbind", great_results)
+
+# pull out fold enrichment for "Blood coagulation" and "Platelet activation" terms
+informative_points$"coagulation" = unname(unlist(great_results %>% filter(Desc == "blood coagulation") %>% select(RegionFoldEnrich)))
+informative_points$"platelet" = unname(unlist(great_results %>% filter(Desc == "platelet activation") %>% select(RegionFoldEnrich)))
+
+# transform fold enrichment to FDP scale for plotting
+M_enrichment = max(c(informative_points$coagulation, informative_points$platelet))
+m_enrichment = min(c(informative_points$coagulation, informative_points$platelet))
+M_FDP = 0.25
+m_FDP = 0
+mult_factor = (M_enrichment - m_enrichment)/(M_FDP - m_FDP)
+add_factor = M_enrichment - M_FDP*mult_factor
+
+df_to_plot_1 = informative_points %>% 
+  select(num_rejections, FDP_bar, coagulation, platelet) %>%
+  mutate_at(c("coagulation", "platelet"), function(enrichment)((enrichment-add_factor)/mult_factor)) %>%
+  gather(key, value, coagulation, platelet, FDP_bar) %>%
+  filter(key %in% c("coagulation", "platelet"))
+
+# pull out first 1500 rejection sets on the path
+df_to_plot_2 = df %>% 
+  filter(num_rejections <= 1500) %>%
+  select(num_rejections, FDP_hat, FDP_bar) %>%
+  gather(key, value, FDP_hat, FDP_bar)
+
+# combine FDP information and enrichment information
+df_to_plot = rbind(df_to_plot_1, df_to_plot_2) %>%
+  mutate(key = factor(key, 
+                      levels = c("FDP_bar", "FDP_hat", "coagulation", "platelet"),
+                      labels = c("FDP bound", "FDP estimate", 
+                                 "Blood coagulation", "Platelet activation")))
+
+df_to_plot_points = df_to_plot %>% 
+  filter(num_rejections %in% informative_points$num_rejections, 
+         key %in% c("FDP bound", "Blood coagulation", "Platelet activation"))
 
 # plot results
-df = data.frame(Robbins, Proposed, DKW)
-df_melt = melt(df)
-
-p2 = ggplot(data = df_melt, aes(x = value, group = variable)) + 
-  geom_histogram(aes(fill = variable, y = ..density..), position = "identity", alpha = 0.5, bins = 50) + 
-  scale_x_log10() + 
-  geom_vline(xintercept = alpha/n, linetype = "dotted") + geom_vline(xintercept = alpha, linetype = "dotted") + 
-  scale_fill_manual(name = "Bound", values = c("blue", "magenta", "orangered")) + ylab("Frequency") +
-  coord_cartesian(ylim=c(0, 1), xlim = c(1e-6,1)) + xlab("value of t where bound is tightest") + 
-  theme_custom() + theme(legend.position = "bottom") 
-plot(p2)
-
-# combine plots
-g <- ggplotGrob(p1 + theme(legend.position="bottom"))$grobs
-legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
-p1 = p1 + theme(legend.position="none")
-p2 = p2 + theme(legend.position="none")
-p1b <- ggplot_build(p1)
-p2b <- ggplot_build(p2)
-g1 = ggplot_gtable(p1b)
-g2 = ggplot_gtable(p2b)
-g <- cbind(g1, g2, size = "first")
-grid.newpage()
-grid.draw(g)
-lheight <- sum(legend$height)
-p = grid.arrange(g, legend, ncol = 1, heights = unit.c(unit(1, "npc") - lheight, lheight))
+p = df_to_plot %>% 
+  ggplot(aes(x = num_rejections, y = value, group = key, colour = key)) + 
+  geom_line(aes(colour = key, linetype = key)) + 
+  geom_point(data = df_to_plot_points, aes(x = num_rejections, y = value, group = key, fill = key), shape = 21, colour = "transparent", inherit.aes = FALSE) +
+  geom_hline(yintercept = 0.1, linetype = "dashed") +
+  scale_colour_manual(values = c("magenta", "darkblue", "goldenrod3", "darkorange2"), 
+                      labels = c("FDP bound", "FDP estimate", "Blood coagulation", "Platelet activation")) + 
+  scale_linetype_manual(values = c("solid", "dotdash", "longdash", "longdash")) + 
+  scale_fill_manual(values = c("magenta", "goldenrod3", "darkorange2")) + 
+  scale_y_continuous(limits = c(0, 0.25), sec.axis = sec_axis(~.*mult_factor + add_factor, name = "Fold enrichment")) + 
+  guides(fill=FALSE, colour = guide_legend(nrow=1, byrow = TRUE)) +
+  theme_custom() + 
+  theme(legend.title = element_blank(), legend.position = "bottom", legend.spacing.x = unit(0.05, 'cm')) + 
+  xlab("Number of rejections") + ylab("FDP")
 plot(p)
-ggsave(filename = sprintf("%s/Figure2.pdf", figures_dir), plot = p, device = cairo_pdf, width = textwidth, height = 0.6*textwidth)
+ggsave(filename = sprintf("%s/Figure2.pdf", figures_dir), plot = p, device = cairo_pdf, width = textwidth, height = 0.75*textwidth)
