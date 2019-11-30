@@ -4,7 +4,7 @@
 # (to reproduce Figure 5).
 # 
 # Author: Eugene Katsevich
-# Date:   8/16/2019
+# Date:   11/30/2019
 ###############################################################
 
 cat(sprintf("Working on Figure 5...\n"))
@@ -13,56 +13,60 @@ cat(sprintf("Working on Figure 5...\n"))
 source("setup.R")
 
 # simulation parameters
-n_vals = c(1000, 2500, 5000)         # number of hypotheses
-alpha = 0.1                          # confidence level
-num_repeats = 1000                   # number of Monte Carlo repetitions
-delta_vals = 10^(seq(-5, -1,         # minimum p-value considered
-                 length.out = 1000))
+n = 2500                    # number of hypotheses
+n_1 = 100                   # number of non-nulls
+mu = 4                      # signal strength
+reps = 1000                 # number of Monte Carlo repetitions
+q_subset = c(0.01,.025,.05, # special set of values of q
+             .075,.1,.125,
+             .15,.175,.2)
 
-# set up array to store results
-num_delta_vals = length(delta_vals)
-num_n_vals = length(n_vals)
-results = array(0, c(num_delta_vals, num_n_vals, num_repeats))
+# minimum allowable FDR levels
+min_q_vals = 10^(seq(-3, -1,        
+                     length.out = 1000))
 
-# run simulation
-for(rep in 1:num_repeats){
-  # generate independent uniform p-values
-  P = runif(max(n_vals))
-  for(n_idx in 1:num_n_vals){
-    # compute degree to which FDP exceeds FDP-hat over the interval [delta, 1]
-    n = n_vals[n_idx]
-    P_sorted = sort(P[1:n])
-    overshoot = 1:n/(n*P_sorted)
-    results[,n_idx,rep] = sapply(delta_vals, function(delta)(max(overshoot[P_sorted > delta])))
-  }
+# non-null configuration
+nonnulls = logical(n)
+nonnulls[1:n_1] = TRUE
+
+# array to store results
+max_discrepancies = matrix(0, reps, length(min_q_vals), dimnames = list(NULL, min_q_vals))
+max_discrepancies_special = numeric(reps)
+
+# repeatedly generate p-values from the independent normal means model, 
+# and calculate the maximum ratio between the realized and nominal FDP values.
+for(rep in 1:reps){
+  Z = rnorm(n)
+  Z[nonnulls] = Z[nonnulls] + mu
+  P = pnorm(Z, lower.tail = FALSE)
+  P.adjusted = p.adjust(P, "fdr")
+  FDP_ratio = function(q)(sum(!nonnulls[P.adjusted <= q])/max(1, sum(P.adjusted <= q))/q)
+  discrepancies = sapply(min_q_vals, FDP_ratio)
+  max_discrepancies[rep,] = rev(cummax(rev(discrepancies)))
+  max_discrepancies_special[rep] = max(sapply(q_subset, FDP_ratio))
 }
 
-# find 1-alpha quantile of overshoot
-overshoots = apply(results, c(1,2), function(vec)(quantile(vec, 1-alpha)))
-
 # massage results for plotting
-colnames(overshoots) = n_vals
-overshoots = as_tibble(overshoots)
-overshoots$delta = delta_vals
-
-df_to_plot = overshoots %>% gather("n", "overshoot", -delta)
-
-closest_delta_vals = sapply(alpha/n_vals, function(val)(delta_vals[which.min(abs(delta_vals - val))]))
-overshoot_vals = sapply(1:num_n_vals, function(n_idx)(df_to_plot %>% filter(near(delta, closest_delta_vals[n_idx]), n == n_vals[n_idx]) %>% pull(overshoot)))
-points_to_plot = tibble(closest_delta_vals, overshoot_vals, n_vals)
-names(points_to_plot) = c("delta", "overshoot", "n")
-
-df_to_plot$n = as.factor(df_to_plot$n)
-points_to_plot$n = as.factor(points_to_plot$n)
+df = melt(max_discrepancies)
+names(df) = c("rep", "min_q_val", "discrepancy")
+df = as_tibble(df)
+special_df = tibble(min_q_val = min(q_subset),
+                    "Mean" = mean(max_discrepancies_special), 
+                    "90% quantile" = quantile(max_discrepancies_special, 0.9)) %>% 
+  gather(key = Measure, value = discrepancy, -min_q_val)
 
 # plot results
-p = df_to_plot %>% ggplot(aes(x = delta, y = overshoot, group = n)) + geom_line(aes(colour = n, linetype = n)) + 
-  geom_point(data = points_to_plot, aes(x = delta, y = overshoot, group = n, colour = n), inherit.aes = FALSE) + 
-  scale_x_continuous(trans = "log", breaks = c(1e-5, 1e-4, 1e-3, 1e-2, 1e-1)) + 
-  scale_y_continuous(trans = "log", breaks = c(1,2,4,8)) +  
-  scale_colour_manual(values = c("red", "purple", "blue")) +
-  scale_linetype_manual(values = c("solid", "longdash", "dotdash")) + 
-  xlab(TeX("Minimum allowable p-value $\\delta$")) + ylab(TeX('$\\sup_{t \\geq \\delta} FDP(t)/\\widehat{FDP}(t)$')) + 
-  theme_custom() + theme(legend.position = "right")
+p = df %>% 
+  group_by(min_q_val) %>% 
+  summarise("Mean" = mean(discrepancy), 
+            "90% quantile" = quantile(discrepancy, 0.9)) %>% 
+  gather(key = Measure, value = discrepancy, -min_q_val) %>% 
+  ggplot(aes(x = min_q_val, y = discrepancy, group = Measure, colour = Measure, linetype = Measure)) + 
+  geom_line() + theme_bw() + scale_x_log10(breaks = c(0.001, 0.01, 0.1), labels = c("0.001", "0.01", "0.1")) + 
+  scale_y_log10(breaks = c(1,2,4,8)) + 
+  scale_linetype_manual(values = c("dashed", "solid")) + 
+  geom_point(data = special_df, show.legend = FALSE) + xlab("Minimum nominal FDR level") + 
+  ylab("Factor FDP exceeds nominal FDR") +  theme_custom()
 plot(p)
-ggsave(filename = sprintf("%s/Figure5.pdf", figures_dir), plot = p, device = cairo_pdf, width = 0.9*textwidth, height = 0.6*textwidth)
+ggsave(plot = p, filename = sprintf("%s/Figure5.pdf", figures_dir),
+       device = cairo_pdf, width = 0.9*textwidth, height = 0.6*textwidth)
