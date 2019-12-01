@@ -61,7 +61,7 @@ for(theta_idx in 1:num_theta_vals){
       hommel = hommelFast(P)
       
       # compute all FDP bounds
-      FDP_bar_reps[theta_idx, mu_idx, "proposed", , rep] = pmin(1, c*(a+1/(1-lambda)*cumsum(P > lambda))/(1:n))
+      FDP_bar_reps[theta_idx, mu_idx, "proposed", , rep] = pmin(1, floor(c*(a+1/(1-lambda)*cumsum(P > lambda)))/(1:n))
       FDP_bar_reps[theta_idx, mu_idx, "GS_Simes", , rep] = 1 - curveSimes(hommel, order = 1:n, alpha = alpha, plot = FALSE)/(1:n)
       FDP_bar_reps[theta_idx, mu_idx, "GS_Fisher", , rep] = 1 - curveFisher(P, order = 1:n, alpha = alpha, plot = FALSE)/(1:n)
       FDP_bar_reps[theta_idx, mu_idx, "truth", , rep] = cumsum(!non_nulls_bool)/(1:n)

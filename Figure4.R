@@ -53,11 +53,11 @@ for(non_null_idx in 1:num_non_nulls_vals){
       P_order = order(P)
       hommel = hommelFast(P)
       
-      FDP_bar_reps[non_null_idx, mu_idx, "proposed", , rep] = pmin(1, c*(a + n*P_sorted)/(1:n))
+      FDP_bar_reps[non_null_idx, mu_idx, "proposed", , rep] = pmin(1, floor(c*(a + n*P_sorted))/(1:n))
       FDP_bar_reps[non_null_idx, mu_idx, "GS_Simes", , rep] = 1 - curveSimes(hommel, order = P_order, alpha = alpha, plot = FALSE)/(1:n)
       FDP_bar_reps[non_null_idx, mu_idx, "GS_Fisher", , rep] = 1 - curveFisher(P, order = P_order, alpha = alpha, plot = FALSE)/(1:n)
-      FDP_bar_reps[non_null_idx, mu_idx, "DKW", , rep] = pmin(1, (sqrt(n/2*log(1/alpha)) + n*P_sorted)/(1:n))
-      FDP_bar_reps[non_null_idx, mu_idx, "truth", , rep] = FDP_path
+      FDP_bar_reps[non_null_idx, mu_idx, "DKW", , rep] = pmin(1, floor(sqrt(n/2*log(1/alpha)) + n*P_sorted)/(1:n))
+      FDP_bar_reps[non_null_idx, mu_idx, "truth", , rep] = cumsum(!non_nulls_bool[P_order])/(1:n)
     }
   }
 }

@@ -64,10 +64,10 @@ for(rho_idx in 1:num_rho_vals){
     P_order = order(P)
     
     # compute all FDP bounds
-    FDP_bar_reps[rho_idx, "sort", rep] = min(pmin(1, c_vals["sort"]*(a + n*P_sorted)/(1:n)))
-    FDP_bar_reps[rho_idx, "preorder_acc", rep] = min(pmin(1, c_vals["preorder_acc"]*(a+1/(1-lambda_preorder_acc)*cumsum(P > lambda_preorder_acc))/(1:n)))
-    FDP_bar_reps[rho_idx, "preorder_sel", rep] = min(pmin(1, c_vals["preorder_sel"]*(a+p_star_preorder_sel/(1-p_star_preorder_sel)*cumsum(P > p_star_preorder_sel))/pmax(1,cumsum(P <= p_star_preorder_sel))))
-    FDP_bar_reps[rho_idx, "online", rep] = min(pmin(1,c_vals["online"]*(a + (1:n)*p_star_online)/pmax(1,cumsum(P < p_star_online))))
+    FDP_bar_reps[rho_idx, "sort", rep] = min(pmin(1, floor(c_vals["sort"]*(a + n*P_sorted))/(1:n)))
+    FDP_bar_reps[rho_idx, "preorder_acc", rep] = min(pmin(1, floor(c_vals["preorder_acc"]*(a+1/(1-lambda_preorder_acc)*cumsum(P > lambda_preorder_acc)))/(1:n)))
+    FDP_bar_reps[rho_idx, "preorder_sel", rep] = min(pmin(1, floor(c_vals["preorder_sel"]*(a+p_star_preorder_sel/(1-p_star_preorder_sel)*cumsum(P > p_star_preorder_sel)))/pmax(1,cumsum(P <= p_star_preorder_sel))))
+    FDP_bar_reps[rho_idx, "online", rep] = min(pmin(1,floor(c_vals["online"]*(a + (1:n)*p_star_online))/pmax(1,cumsum(P < p_star_online))))
   }
 }
 # compute lower alpha quantile of FDP_bar
@@ -86,7 +86,7 @@ p = df_to_plot %>%
   ggplot(aes(x = rho, y = 1/FDP_bar, group = method)) + 
   geom_line(aes(colour = method, linetype = method)) + 
   xlab(TeX("Correlation $\\rho$")) + ylab(TeX('max $FDP/\\bar{FDP}$')) + 
-  scale_y_continuous(limits = c(1,2.15), breaks = c(1,1.25,1.5, 1.75, 2)) +
+  scale_y_continuous(limits = c(1,2), breaks = c(1,1.25,1.5, 1.75, 2)) +
   scale_linetype_manual(values = c("solid", "longdash", "longdash", "dotdash")) + 
   theme_custom() + theme(legend.position = "right", legend.title = element_blank())
 plot(p)

@@ -22,9 +22,9 @@ t = seq(1e-5,1,    # p-value cutoffs
 c = log(1/alpha)/log(1 + log(1/alpha))
 
 # compute each bound
-Robbins = n*t/alpha
-Proposed = c*(1+n*t)
-DKW = sqrt(n/2*log(1/alpha)) + n*t
+Robbins = floor(n*t/alpha)
+Proposed = floor(c*(1+n*t))
+DKW = floor(sqrt(n/2*log(1/alpha)) + n*t)
 Quantile = qbinom(1-alpha, n, t)
 df = data.frame(t, Robbins, Proposed, DKW, Quantile)
 names(df)[5] = "(Pointwise FDP Quantile)"
