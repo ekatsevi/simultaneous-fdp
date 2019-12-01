@@ -30,8 +30,9 @@ C = -log(alpha)/log(2-alpha)
 
 # compute FDP-hat and FDP-bar
 FDP_hat_vec = get_FDP_hat(df$W)
+FDP_bar_vec = get_FDP_bar(df$W, C)
 df$FDP_hat = FDP_hat_vec
-df = df %>% mutate(FDP_bar = pmin(1, C*FDP_hat)) %>% filter(W > 0)
+df$FDP_bar = FDP_bar_vec
 df$num_rejections = 1:nrow(df)
 
 # find set of interesting points along the path

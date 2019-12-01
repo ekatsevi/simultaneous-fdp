@@ -74,6 +74,11 @@ get_FDP_hat = function(W){
   return((1+cumsum(W<0))/cumsum(W>0))
 }
 
+# compute FDP-bar based on knockoff statistics W
+get_FDP_bar = function(W, C){
+  return(pmin(1,floor(C*(1+cumsum(W<0)))/cumsum(W>0)))
+}
+
 # find number of rejections made for given phenotype 
 # when controlling FDR at level q
 get_FDR_thresh = function(df, phenotype, q){
