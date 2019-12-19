@@ -2,7 +2,7 @@
 
 Code to reproduce the figures from the paper:
 
-E. Katsevich and A. Ramdas, Simultaneous high-probability bounds on the false discovery proportion in structured, regression, and online settings, https://arxiv.org/abs/1803.06790
+E. Katsevich and A. Ramdas, Simultaneous high-probability bounds on the false discovery proportion in structured, regression, and online settings, Annals of Statistics, 2020 (https://arxiv.org/abs/1803.06790)
 
 Run reproduce_all.R to reproduce all tables and figures, which will be placed in the directory figures/.
 
