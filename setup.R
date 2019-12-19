@@ -4,15 +4,8 @@ rm(list = ls())
 # set paths to figures and stored data
 data_dir = "data"
 figures_dir = "figures"
-if(!dir.exists(data_dir)){
-  dir.create(data_dir)
-}
-if(!dir.exists(data_dir)){
-  dir.create(data_dir)
-}
 
 # load R packages
-library(tidyverse)
 library(cherry)
 library(reshape2)
 library(downloader)
@@ -22,6 +15,8 @@ library(gridExtra)
 library(cowplot)
 library(latex2exp)
 library(kableExtra)
+library(tidyverse)
+library(ggforce)
 
 # source helper functions
 source("UKBB_utils.R")
@@ -33,7 +28,7 @@ set.seed(123)
 textwidth = 4.9823
 font.size = 10
 theme_custom <- function(){ 
-  theme_bw() + theme(text = element_text(size = font.size), 
-                     legend.text = element_text(size = font.size),
-                     strip.text = element_text(size = font.size))
+  theme_bw() + theme(text = element_text(size = font.size, family="LM Roman 10"), 
+                     legend.text = element_text(size = font.size, family="LM Roman 10"),
+                     strip.text = element_text(size = font.size, family="LM Roman 10"))
 }

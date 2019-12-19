@@ -76,7 +76,15 @@ get_FDP_hat = function(W){
 
 # compute FDP-bar based on knockoff statistics W
 get_FDP_bar = function(W, C){
-  return(pmin(1,floor(C*(1+cumsum(W<0)))/cumsum(W>0)))
+  num_discoveries = cumsum(W>0)
+  # initial bound on V
+  max_false_positives = pmin(num_discoveries, floor(C*(1+cumsum(W<0))))
+  min_true_positives = num_discoveries - max_false_positives
+  # interpolate
+  max_false_positives = rev(cummin(rev(max_false_positives)))
+  min_true_positives = cummax(min_true_positives)
+  max_false_positives = pmin(max_false_positives, num_discoveries - min_true_positives)
+  return(max_false_positives/num_discoveries)
 }
 
 # find number of rejections made for given phenotype 

@@ -33,11 +33,13 @@ FDP_hat_vec = get_FDP_hat(df$W)
 FDP_bar_vec = get_FDP_bar(df$W, C)
 df$FDP_hat = FDP_hat_vec
 df$FDP_bar = FDP_bar_vec
+df = df %>% filter(W > 0)
 df$num_rejections = 1:nrow(df)
 
 # find set of interesting points along the path
 values = df %>% filter(num_rejections <= 1000) %>% pull(FDP_bar)
 k_vals = get_informative_points(values, min_val_improvement = 0.01, min_k_improvement = 50)
+# k_vals = c(270, 435, 544, 598, 667, 737, 797, 895, 946, 998)
 informative_points = data.frame(k_vals, values[k_vals])
 names(informative_points) = c("num_rejections", "FDP_bar")
 
